@@ -40,16 +40,19 @@ str(pbc)
 head(pbc)
 ```
 
+for(i in 1:length(pbc)){
+  hist(pbc[,i], main=paste("pbc","[",i,"]"))
+
 범주형 자료는 as.factor로 변환한다. 
 ```{r}
-# id, status, drug, sex, ascites, hepatom, spiders, edema, stage(순서 있음)
-pbc$id <- as.factor(pbc$id)
-pbc$status <- as.factor(pbc$status)
-pbc$drug <- as.factor(pbc$drug)
-pbc$sex <- as.factor(pbc$sex)
-pbc$hepatom <- as.factor(pbc$hepatom)
-pbc$spiders <- as.factor(pbc$spiders)
-pbc$edema <- as.factor(pbc$edema)
+## id, status, drug, sex, ascites, hepatom, spiders, edema, stage(순서 있음)
+#pbc$id <- as.factor(pbc$id)
+#pbc$status <- as.factor(pbc$status)
+#pbc$drug <- as.factor(pbc$drug)
+#pbc$sex <- as.factor(pbc$sex)
+#pbc$hepatom <- as.factor(pbc$hepatom)
+#pbc$spiders <- as.factor(pbc$spiders)
+#pbc$edema <- as.factor(pbc$edema)
 ```
 
 
@@ -57,9 +60,45 @@ pbc$edema <- as.factor(pbc$edema)
 # histogram
 # scale 변환해야 할 변수를 알아본다. 
 colnames(pbc)
+ #[1] "id"       "fudays"   "status"   "drug"     "age"      "sex"      "ascites"  "hepatom"  "spiders"  "edema"
+ #[11] "bili"     "chol"     "albumin"  "copper"   "alkphos"  "sgot"     "trig"     "platelet" "protime"  "stage"
 
-for(i in 1:length(pbc)){
-  hist(pbc[,i], main=paste("pbc","[",i,"]"))
+for(i in 1:ncol(pbc)){
+  hist(pbc[,i], xlab='', main=paste("pbc","[",i,"]"))
 }
 ```
+11,14,15번째 변수(각 bili, copper, alkphos)는 스케일이 치우쳐 있으므로 log 변환을 하면 좋다.   
+논문에서는 bili, protime, edema, albumin, age 변수를 marker의 base covariates로 사용하였다.  
+논문의 저자는 bili뿐만 아니라 19번째 변수 protime또한 log 변환을 해주어 사용하였다. 
+   
+   
+pbc data 속 앞 312명의 patients는 randomized patient다. 따라서 앞 312명의 환자만을 자료로 사용하여 분석한다.  
+```{r}
+unique(pbc$id)   #id: 1~418
+```
+    
+```{r}
+pbc1 <- pbc[1:312,]    #pbc1: id1~312 환자만 불러온 데이터 
+table(pbc1$status)   #0:censored , 1:transplant , 2:dead   
+```
+pbc 데이터는 '다상태' 자료이다. 이번 분석에서는 다상태가 아닌 2가지 상태만으로 변경하여 사용한다.  
+즉, censored와 transplant를 모두 'censored'로 간주하고, dead는 그대로 'dead(event occur)'로 간주한다.   
+```{r}
+survival.status <- ifelse(pbc1$status==2,1,0)    #survival.status: status
+table(survival.status)
+```
+```{r}
+survival.time <- pbc1$fudays    #survival.time: follow-up days
+pbc1$status1 <- survival.status    #add 'survival.status' in pbc1 dataset 
+```
+  
+  
+### model fitting
+```{r}
+fit <- coxph(Surv(fudays,status1)~log(bili)+log(protime)+edema+albumin+age, data=pbc1)
+eta <- fit$linear.predictors
+```
+
+
+
 
