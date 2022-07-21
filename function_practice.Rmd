@@ -1,0 +1,73 @@
+---
+title: "risksetROC_practice each funciton"
+output: html_document
+---
+
+```{r library}
+library(MASS)
+library(survival)
+library(risksetROC)
+```
+
+## CoxWeights
+```{r}
+data(VA)  #폐암 데이터   ##137 obs. of 8 variables
+head(VA)   #stime : survival of follow-up time in days
+           #status : 1-dead, 0-censored
+           #treat : treatment, 1-standard, 0-test
+           #age : 환자의 나이
+           #Karn : 환자의 Karnofsky score (0~100)
+           #cell : 네 가지 cell type-1,2,3,4
+           #prior : prior therapy 
+table(VA$treat)
+table(VA$cell)
+```
+
+```{r}
+survival.time <- VA$stime
+survival.status <- VA$status
+score <- VA$Karn
+cell.type <- factor(VA$cell)
+tx <- as.integer(VA$treat==1)  #treat==1 -> 1, treat==2 -> 0
+   table(tx); table(VA$treat)
+age <- VA$age
+survival.status[VA$stime > 500] <- 0    #stime이 500을 초과하면 중도절단이라고 간주한다. 
+survival.time[VA$stime > 500] <- 500    #조건에 해당하는 경우, 관측된 시점T를 중도절단 시점 500으로 설정한다. 
+```
+
+```{r}
+#fitting to obtain predictor
+fit0 <- coxph(Surv(survival.time, survival.status)~score+cell.type+tx+age, na.action=na.omit)
+eta <- fit0$linear.predictors  #num [1:137]   #marker
+AUC <- NULL   #빈 공간 생성
+
+summary(fit0)
+out <- CoxWeights(marker=eta, Stime=survival.time, status=survival.status, predict.time=30)   #riskset을 생성할 기준 시점 설정:30
+out
+out$AUC   #0.7097247
+```
+
+```{r}
+### CoxWeights 결과 이해 
+plot(out$FP,out$TP, main='ROC curve (predict.time=30)')   #ROC curve
+lines(out$FP,out$FP, type='l',lty=2, col='red')
+```
+
+##### Question
+AUC 계산할 때 2배 높이로 안 하고(like 'aTP') TP를 바로 높이 길이로 쓸 수 있지 않을까?
+```{r}
+##Question: AUC 계산할 때 2배 높이로 안 하고(like 'aTP') TP를 바로 높이 길이로 쓸 수 있지 않을까? 
+dFP <- abs(out$FP[-1] - out$FP[-length(out$FP)])
+dFP   #모든 간격이 0.01052632로 같음.   #num[1:98]
+TP <- out$TP    #num[1:99]
+TP
+sum(dFP * TP[-length(TP)])   #0.7149099
+out$AUC   #0.7097247  #by CoxWeights()
+```
+CoxWeights()로 구한 AUC와 다소 차이가 난다. CoxWeights로 구한 AUC가 더 작다. 
+```{r}
+sum(dFP * TP[-1])   #0.7045396
+```
+위에서 차이가 나는 이유를, 본 ROC curve보다 직사각형을 넘치게 채운 경우, 덜 채운 경우의 차이로 이해하였다.(구분구적법 아이디어)    
+그래서 직사각형을 넘치지 않게 하는 경우로 구한 결과, CoxWeights()로 구한 0.7097247과 좀더 유사한 값이 나왔다.   
+그러나 정확히 같은 값은 아니다.   
