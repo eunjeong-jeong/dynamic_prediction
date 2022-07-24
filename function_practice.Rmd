@@ -9,7 +9,7 @@ library(survival)
 library(risksetROC)
 ```
 
-## CoxWeights
+## 1. CoxWeights()
 ```{r}
 data(VA)  #폐암 데이터   ##137 obs. of 8 variables
 head(VA)   #stime : survival of follow-up time in days
@@ -71,3 +71,31 @@ sum(dFP * TP[-1])   #0.7045396
 위에서 차이가 나는 이유를, 본 ROC curve보다 직사각형을 넘치게 채운 경우, 덜 채운 경우의 차이로 이해하였다.(구분구적법 아이디어)    
 그래서 직사각형을 넘치지 않게 하는 경우로 구한 결과, CoxWeights()로 구한 0.7097247과 좀더 유사한 값이 나왔다.   
 그러나 정확히 같은 값은 아니다.   
+
+
+
+## 2. IntegrateAUC() 
+```{r}
+surv.prob <- unique(survfit(Surv(survival.time, survival.status)~1)$surv)   #Kaplan-Meier estimator
+  summary(surv.prob)
+fit0; eta
+model.score <- eta
+utimes <- unique(survival.time[survival.status==1]) #unique event times for subjects   #only non-censored
+utimes <- utimes[order(utimes)]   #오름차순 정렬
+
+## find AUC at unique failure times
+AUC <- rep(NA, length(utimes))    #utimes 각 시점별 계산된 AUC 저장공간 생성
+for(j in 1:length(utimes)){
+  out <- CoxWeights(eta, survival.time, survival.status, utimes[j])
+  AUC[j] <- out$AUC
+}
+AUC
+```
+
+```{r}
+## integrated AUC to get concordance measure
+iAUC <- IntegrateAUC(AUC, utimes, surv.prob, tmax=365)
+iAUC   #time-dependent concordance measure
+```
+
+
