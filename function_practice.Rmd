@@ -99,4 +99,25 @@ iAUC   #time-dependent concordance measure
 ```
 
 
+## 7. SchoenSmooth()
+```{r}
+data(pbc)
+pbc1 <- pbc[1:312,]
+survival.status <- ifelse(pbc1$status==2,1,0)
+survival.time <- pbc1$fudays
+pbc1$status1 <- survival.status
+pbc1$status1 <- survival.status
+fit <- coxph(Surv(fudays,status1)~log(bili)+log(protime)+edema+albumin+age, data=pbc1)   #coxph로 적합한다. 
+
+eta5 <- fit$linear.predictors
+x <- eta5
+nobs <- length(survival.time[survival.status==1])    #중도절단 되지 않은 수 
+span <- 1.5*(nobs^(-0.2))    #0.571
+
+fitCox5 <- coxph(Surv(survival.time, survival.status)~x)
+bfnx1.1 <- SchoenSmooth(fit=fitCox5, Stime=survival.time, status=survival.status, span=span, order=1)    #order=1
+bfnx1.0 <- SchoenSmooth(fit=fitCox5, Stime=survival.time, status=survival.status, span=span, order=0)    #order=0
+
+plot
+```
 
