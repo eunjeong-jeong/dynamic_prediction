@@ -71,8 +71,11 @@ sum(dFP * TP[-1])   #0.7045396
 위에서 차이가 나는 이유를, 본 ROC curve보다 직사각형을 넘치게 채운 경우, 덜 채운 경우의 차이로 이해하였다.(구분구적법 아이디어)    
 그래서 직사각형을 넘치지 않게 하는 경우로 구한 결과, CoxWeights()로 구한 0.7097247과 좀더 유사한 값이 나왔다.   
 그러나 정확히 같은 값은 아니다.   
-
-
+  
+직사각형이 넘치는 방법으로 구했을 때, 0.7149099  
+직사각형이 부족한 방법으로 구했을 때, 0.7045396  
+CoxWeights() 방법은 이 둘의 평균이다. 0.7097247 = (0.7149099+0.7045396)/2
+   
 
 ## 2. IntegrateAUC() 
 ```{r}
@@ -115,9 +118,79 @@ nobs <- length(survival.time[survival.status==1])    #중도절단 되지 않은
 span <- 1.5*(nobs^(-0.2))    #0.571
 
 fitCox5 <- coxph(Surv(survival.time, survival.status)~x)
-bfnx1.1 <- SchoenSmooth(fit=fitCox5, Stime=survival.time, status=survival.status, span=span, order=1)    #order=1
-bfnx1.0 <- SchoenSmooth(fit=fitCox5, Stime=survival.time, status=survival.status, span=span, order=0)    #order=0
+bfnx1.1 <- SchoenSmooth(fit=fitCox5, Stime=survival.time, status=survival.status, span=span, order=1)   #order=1 -> local linear
+bfnx1.0 <- SchoenSmooth(fit=fitCox5, Stime=survival.time, status=survival.status, span=span, order=0)   #order=0 -> local mean
 
-plot
+plot(bfnx1.1$time, bfnx1.1$beta, type='l', xlab="Time", ylab='beta(t)')
+lines(bfnx1.0$time, bfnx1.0$beta, lty=3)
+```
+
+#### practice
+bfnx1.1 <- SchoenSmooth(fit=fitCox5, Stime=survival.time, status=survival.status, span=span, order=1)   
+bfnx1.0 <- SchoenSmooth(fit=fitCox5, Stime=survival.time, status=survival.status, span=span, order=0)   
+위 식을 입력하면 SchoenSmooth() function 내에서 어떤 과정을 거치는지 알아본다.    
+```{r}
+shrink = FALSE
+#survival.time, survival.status  
+```
+
+```{r}
+phtest <- cox.zph(fitCox5,transform='identity')
+phtest
+```
+cox.zph()를 통해 비례위험가정이 만족하는지 알아본 결과, p=0.4로, 유의수준보다 크다.(귀무가설: 해당 변수가 비례위험 가정을 만족한다.)   
+따라서 변수 x는 비례위험가정을 만족하는 것을 확인할 수 있다. 
+```{r}
+## 참고
+plot(phtest) 
+```
+이는 plot을 통해 확인해볼 수도 있는데, time에 따라서 값이 크게 변함없는 것을 알 수 있다.   
+
+
+```{r}
+utimes <- survival.time[survival.status==1]    #int[1:125]
+utimes <- utimes[order(utimes)]     #오름차순으로 정렬됨 
+
+p <- length(fitCox5$coef)   #1
+bbb <- rep(NA,length(utimes))   #[1:125]NA NA NA...
+shrinkage <- rep(NA, length(utimes))    #[1:125]NA NA NA...
+```
+
+```{r}
+## find the bandwidth for each time
+grid.t <- utimes
+nt <- length(grid.t)   #125
+lambda <- rep(0,nt)   #num[1:125]0 0 0...
+
+## take span% of the data
+nd <- round(span*nt)   #71
+
+for(i in 1:nt){
+  lambda[i] <- sort(abs(grid.t - grid.t[i]))[nd]
+}     #lambda[i] : sort(abs(grid.t - grid.t[i]))의 71번째 값 
+
+for(j in 1:length(utimes)){
+  target <- grid.t[j]
+  u <- (grid.t - target)/lambda[j]
+  iu <- ifelse(abs(u)>1, 0,1)
+  wt <- iu*0.75*(1-u^2)/lambda[j]
+  www <- wt/sum(wt)
+  
+  ######### ---- shrink=FALSE, p=1, order=1 ---- ########
+  cTime <- phtest$x - target
+  fit <- lm(phtest$y ~ cTime, weights=www)
+  nnn <- sum(www > 0)
+  ddd <- (nnn-1)/nnn
+  beta <- fit$coef[1]
+  
+  bbb[j] <- beta
+  shrinkage[j] <- ddd
+}
+```
+
+```{r}
+#out <- list(time=utimes, beta=bbb, shrinkage=shrinkage)
+out <- list(time=utimes, beta=bbb)
+out
 ```
 
